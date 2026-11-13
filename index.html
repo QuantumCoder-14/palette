@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Palette — colour conversions and WCAG contrast, checked in your browser</title>
+<meta name="description" content="Convert between HEX, RGB and HSL, generate tints and shades, and check text contrast against WCAG AA and AAA. Runs locally.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f2ee; --card:#fff; --ink:#1c1c1a; --soft:#4d4d48; --muted:#83837b;
+    --line:rgba(28,28,26,0.13); --line-soft:rgba(28,28,26,0.06);
+    --pass:#2f6b3f; --pass-bg:rgba(47,107,63,0.1);
+    --fail:#a33b2a; --fail-bg:rgba(163,59,42,0.1);
+    --display:'Bricolage Grotesque',system-ui,sans-serif;
+    --sans:'Public Sans',system-ui,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#141413; --card:#1c1c1a; --ink:#f0efe9; --soft:#c4c4bb; --muted:#8f8f86;
+      --line:rgba(240,239,233,0.16); --line-soft:rgba(240,239,233,0.08);
+      --pass:#8fca9f; --pass-bg:rgba(143,202,159,0.14);
+      --fail:#e89480; --fail-bg:rgba(232,148,128,0.14);
+    }
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--ink)}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 24px}
+  header{padding:36px 0 24px;border-bottom:1px solid var(--line-soft)}
+  h1{font-family:var(--display);font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.03em;line-height:1.02}
+  h1 span{color:var(--muted)}
+  .tag{color:var(--muted);margin-top:8px;max-width:54ch}
+  main{padding:26px 0 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px;margin-bottom:20px}
+  h2{font-family:var(--display);font-weight:600;font-size:17px;letter-spacing:-.01em;margin-bottom:14px}
+  label{display:block;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:6px}
+  input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:7px;
+    padding:9px 11px;font-family:var(--mono);font-size:13.5px}
+  input[type=text]:focus{outline:none;border-color:var(--ink)}
+  input[type=color]{width:100%;height:52px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:640px){.pair{grid-template-columns:1fr}}
+  .conv{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+  @media(max-width:700px){.conv{grid-template-columns:1fr}}
+  .val{font-family:var(--mono);font-size:13px;padding:9px 11px;background:var(--bg);border:1px solid var(--line-soft);
+    border-radius:7px;cursor:pointer;position:relative;word-break:break-all}
+  .val:hover{border-color:var(--line)}
+  .val small{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:9.5px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.06em;opacity:0;transition:opacity .15s}
+  .val:hover small{opacity:1}
+  .ramp{display:flex;margin-top:18px;border-radius:8px;overflow:hidden;border:1px solid var(--line-soft)}
+  .ramp div{flex:1;height:56px;cursor:pointer;position:relative}
+  .ramp div:hover::after{content:attr(data-hex);position:absolute;bottom:2px;left:0;right:0;text-align:center;
+    font-family:var(--mono);font-size:9px;color:#fff;background:rgba(0,0,0,.45)}
+  .preview{border-radius:10px;padding:26px 22px;margin-bottom:16px;border:1px solid var(--line-soft)}
+  .preview .big{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:-.02em;margin-bottom:6px}
+  .preview .small{font-size:13.5px}
+  .ratio{font-family:var(--display);font-weight:800;font-size:38px;letter-spacing:-.03em;line-height:1}
+  .ratio small{font-family:var(--mono);font-size:11px;font-weight:400;color:var(--muted);letter-spacing:0}
+  .checks{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}
+  @media(max-width:560px){.checks{grid-template-columns:1fr}}
+  .check{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 11px;border-radius:7px;
+    font-family:var(--mono);font-size:11.5px;background:var(--bg)}
+  .check b{font-weight:500}
+  .check.pass{background:var(--pass-bg);color:var(--pass)}
+  .check.fail{background:var(--fail-bg);color:var(--fail)}
+  .row{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-top:14px}
+  .row > div{flex:1;min-width:130px}
+  .swap{appearance:none;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:7px;
+    padding:9px 13px;font-family:var(--mono);font-size:11.5px;color:var(--soft)}
+  .swap:hover{border-color:var(--ink);color:var(--ink)}
+  footer{border-top:1px solid var(--line-soft);padding:22px 0 38px}
+  .foot{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+  .foot a{color:var(--soft);text-decoration:none;border-bottom:1px dotted var(--line)}
+  .foot a:hover{color:var(--ink);border-color:var(--ink)}
+  .note{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Palette<span>.</span></h1>
+    <p class="tag">Convert HEX, RGB and HSL, build a tint ramp, and check whether your text is actually readable. All arithmetic happens locally.</p>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <section class="card">
+      <h2>Colour</h2>
+      <div class="pair">
+        <div>
+          <label for="picker">Pick</label>
+          <input type="color" id="picker" value="#1c4f8f">
+        </div>
+        <div>
+          <label for="hexin">Or type a hex</label>
+          <input type="text" id="hexin" value="#1c4f8f" spellcheck="false" maxlength="9">
+          <p class="note" id="hexnote">Three, six or eight digits. Alpha is shown but not used in contrast maths.</p>
+        </div>
+      </div>
+
+      <div class="conv">
+        <div><label>HEX</label><div class="val" id="v-hex" data-copy="#1c4f8f">#1c4f8f<small>copy</small></div></div>
+        <div><label>RGB</label><div class="val" id="v-rgb" data-copy="28, 79, 143">28, 79, 143<small>copy</small></div></div>
+        <div><label>HSL</label><div class="val" id="v-hsl" data-copy="hsl(213, 67%, 34%)">hsl(213, 67%, 34%)<small>copy</small></div></div>
+      </div>
+
+      <label style="margin-top:20px">Tints and shades</label>
+      <div class="ramp" id="ramp"></div>
+      <p class="note">Click a swatch to load it. Left is lightest, right is darkest.</p>
+    </section>
+
+    <section class="card">
+      <h2>Contrast</h2>
+      <div class="row">
+        <div><label for="fg">Text</label><input type="color" id="fg" value="#1c1c1a"></div>
+        <div><label for="bg">Background</label><input type="color" id="bg" value="#ffffff"></div>
+        <button class="swap" id="swap">Swap</button>
+      </div>
+
+      <div class="preview" id="preview" style="margin-top:18px">
+        <div class="big">Large text, 24px bold</div>
+        <div class="small">Normal body text at 16px, which is what most of your copy will be.</div>
+      </div>
+
+      <div class="ratio" id="ratio">— <small>contrast ratio</small></div>
+      <div class="checks">
+        <div class="check" id="c-aa"><b>AA normal text</b><span>—</span></div>
+        <div class="check" id="c-aaa"><b>AAA normal text</b><span>—</span></div>
+        <div class="check" id="c-aal"><b>AA large text</b><span>—</span></div>
+        <div class="check" id="c-aaal"><b>AAA large text</b><span>—</span></div>
+      </div>
+      <p class="note">WCAG 2.1: 4.5:1 for normal text, 3:1 for large text at AA; 7:1 and 4.5:1 at AAA.</p>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <span>Built by <a href="https://github.com/QuantumCoder-14">Siddhant Neekhra</a> · MIT with Commons Clause</span>
+      <span>No tracking. <a href="https://quantumcoder-14.github.io/">More tools</a></span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= CORE (tested separately) ================= */
+  // <<CORE
+  function parseHex(text) {
+    var value = String(text).trim().replace(/^#/, '');
+    if (value.length === 3) value = value.split('').map(function (c) { return c + c; }).join('');
+    if (value.length === 8) value = value.slice(0, 6);
+    if (!/^[0-9a-fA-F]{6}$/.test(value)) return null;
+    return {
+      r: parseInt(value.slice(0, 2), 16),
+      g: parseInt(value.slice(2, 4), 16),
+      b: parseInt(value.slice(4, 6), 16)
+    };
+  }
+
+  function rgbToHex(rgb) {
+    function part(n) {
+      var clamped = Math.max(0, Math.min(255, Math.round(n)));
+      return clamped.toString(16).padStart(2, '0');
+    }
+    return '#' + part(rgb.r) + part(rgb.g) + part(rgb.b);
+  }
+
+  function rgbToHsl(rgb) {
+    var r = rgb.r / 255, g = rgb.g / 255, b = rgb.b / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var l = (max + min) / 2, h = 0, s = 0;
+    if (max !== min) {
+      var d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+  }
+
+  function relativeLuminance(rgb) {
+    var channels = [rgb.r, rgb.g, rgb.b].map(function (value) {
+      var c = value / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  }
+
+  function contrastRatio(rgbA, rgbB) {
+    var a = relativeLuminance(rgbA), b = relativeLuminance(rgbB);
+    var lighter = Math.max(a, b), darker = Math.min(a, b);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function wcag(ratio) {
+    return {
+      aaNormal: ratio >= 4.5,
+      aaaNormal: ratio >= 7,
+      aaLarge: ratio >= 3,
+      aaaLarge: ratio >= 4.5
+    };
+  }
+
+  function mix(rgb, target, amount) {
+    // amount 0 = original, 1 = fully target
+    return {
+      r: Math.round(rgb.r + (target - rgb.r) * amount),
+      g: Math.round(rgb.g + (target - rgb.g) * amount),
+      b: Math.round(rgb.b + (target - rgb.b) * amount)
+    };
+  }
+
+  function ramp(rgb, steps) {
+    // Lightest to darkest, always including the original in the middle-ish.
+    var out = [];
+    for (var i = 0; i < steps; i++) {
+      var t = i / (steps - 1);
+      out.push(t <= 0.5 ? mix(rgb, 255, (0.5 - t) * 1.6) : mix(rgb, 0, (t - 0.5) * 1.6));
+    }
+    return out.map(rgbToHex);
+  }
+  // CORE>>
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { parseHex: parseHex, rgbToHex: rgbToHex, rgbToHsl: rgbToHsl,
+      relativeLuminance: relativeLuminance, contrastRatio: contrastRatio, wcag: wcag, ramp: ramp };
+  }
+
+  /* ================= UI ================= */
+  var $ = function (id) { return document.getElementById(id); };
+
+  function currentHex() {
+    var parsed = parseHex($('hexin').value);
+    return parsed ? rgbToHex(parsed) : null;
+  }
+
+  function renderColour() {
+    var rgb = parseHex($('hexin').value);
+    if (!rgb) {
+      $('hexnote').textContent = 'Not a valid hex colour — try #1c4f8f.';
+      return;
+    }
+    $('hexnote').textContent = 'Three, six or eight digits. Alpha is shown but not used in contrast maths.';
+    var hex = rgbToHex(rgb);
+    var hsl = rgbToHsl(rgb);
+    $('picker').value = hex;
+
+    $('v-hex').firstChild.nodeValue = hex;
+    $('v-hex').setAttribute('data-copy', hex);
+    $('v-rgb').firstChild.nodeValue = rgb.r + ', ' + rgb.g + ', ' + rgb.b;
+    $('v-rgb').setAttribute('data-copy', 'rgb(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ')');
+    var hslText = 'hsl(' + hsl.h + ', ' + hsl.s + '%, ' + hsl.l + '%)';
+    $('v-hsl').firstChild.nodeValue = hslText;
+    $('v-hsl').setAttribute('data-copy', hslText);
+
+    var colours = ramp(rgb, 9);
+    var container = $('ramp');
+    container.innerHTML = '';
+    colours.forEach(function (value) {
+      var swatch = document.createElement('div');
+      swatch.style.background = value;
+      swatch.setAttribute('data-hex', value);
+      swatch.title = value;
+      swatch.addEventListener('click', function () {
+        $('hexin').value = value;
+        renderColour();
+      });
+      container.appendChild(swatch);
+    });
+  }
+
+  function renderContrast() {
+    var fg = parseHex($('fg').value) || { r: 0, g: 0, b: 0 };
+    var bg = parseHex($('bg').value) || { r: 255, g: 255, b: 255 };
+    var ratio = contrastRatio(fg, bg);
+    var results = wcag(ratio);
+
+    $('preview').style.color = rgbToHex(fg);
+    $('preview').style.background = rgbToHex(bg);
+    $('ratio').firstChild.nodeValue = ratio.toFixed(2) + ':1 ';
+
+    [['c-aa', results.aaNormal], ['c-aaa', results.aaaNormal],
+     ['c-aal', results.aaLarge], ['c-aaal', results.aaaLarge]].forEach(function (pair) {
+      var el = $(pair[0]);
+      var passed = pair[1];
+      el.className = 'check ' + (passed ? 'pass' : 'fail');
+      el.lastElementChild.textContent = passed ? 'pass' : 'fail';
+    });
+  }
+
+  ['picker'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      $('hexin').value = $(id).value;
+      renderColour();
+    });
+  });
+  $('hexin').addEventListener('input', renderColour);
+  $('fg').addEventListener('input', renderContrast);
+  $('bg').addEventListener('input', renderContrast);
+
+  $('swap').addEventListener('click', function () {
+    var fg = $('fg').value, bg = $('bg').value;
+    $('fg').value = bg;
+    $('bg').value = fg;
+    renderContrast();
+  });
+
+  document.querySelectorAll('.val').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var text = el.getAttribute('data-copy');
+      if (!text) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+        var label = el.querySelector('small');
+        var original = label.textContent;
+        label.textContent = 'copied';
+        setTimeout(function () { label.textContent = original; }, 1200);
+      }
+    });
+  });
+
+  renderColour();
+  renderContrast();
+})();
+</script>
+</body>
+</html>
